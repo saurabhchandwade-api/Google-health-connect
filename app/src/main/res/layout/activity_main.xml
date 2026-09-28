@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F8FAFC"
+    tools:context=".presentation.MainActivity">
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center"
+        android:indeterminateTint="#3B82F6"
+        android:visibility="visible" />
+
+    <LinearLayout
+        android:id="@+id/nativeFallbackContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
+        android:background="@android:color/white"
+        android:elevation="6dp"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/fallbackTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Fitness Data Permission Required"
+            android:textColor="#0F172A"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/fallbackMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:lineSpacingExtra="4dp"
+            android:text="This dashboard requires permission to access your fitness activity data from Google Fit or Health Connect."
+            android:textColor="#475569"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnGrantPermissions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:backgroundTint="#2563EB"
+            android:paddingVertical="12dp"
+            android:text="Grant Fitness Permission"
+            android:textAllCaps="false"
+            android:textColor="@android:color/white" />
+
+        <Button
+            android:id="@+id/btnOpenSettings"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:paddingVertical="12dp"
+            android:text="Open Android Settings"
+            android:textAllCaps="false"
+            android:textColor="#2563EB" />
+    </LinearLayout>
+
+</FrameLayout>

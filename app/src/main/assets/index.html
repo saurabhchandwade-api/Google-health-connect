@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fitness Metrics Dashboard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <div class="header">
+    <div class="title-row">
+      <h1>Fitness Metrics Dashboard</h1>
+      <div class="badges">
+        <span id="providerBadge" class="badge badge-warning">Checking...</span>
+        <span id="permissionBadge" class="badge badge-danger">No Permission</span>
+      </div>
+    </div>
+
+    <div class="controls-row">
+      <select id="providerSelect" class="provider-select" aria-label="Select Fitness Provider">
+        <option value="GoogleFit">Google Fit API</option>
+        <option value="HealthConnect">Health Connect API</option>
+        <option value="Demo">Demo Mode</option>
+      </select>
+
+      <div class="btn-group">
+        <button id="btnRequestPermission" class="btn btn-primary">Connect Access</button>
+        <button id="btnRefresh" class="btn btn-secondary">Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorBanner" class="banner banner-danger" style="display: none;">
+    <span id="errorMessage">An error occurred.</span>
+    <button id="btnErrorAction" class="btn btn-secondary" style="font-size: 0.75rem;">Fix</button>
+  </div>
+
+  <div class="range-picker">
+    <button class="range-btn active" data-range="TODAY">Today</button>
+    <button class="range-btn" data-range="WEEK">This Week</button>
+    <button class="range-btn" data-range="MONTH">This Month</button>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-icon">🚶</div>
+      <div class="metric-title">Steps</div>
+      <div id="metricSteps" class="metric-value">--</div>
+      <div id="subSteps" class="metric-sub">Target: 10,000</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon">🔥</div>
+      <div class="metric-title">Calories</div>
+      <div id="metricCalories" class="metric-value">--</div>
+      <div class="metric-sub">kcal</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon">📍</div>
+      <div class="metric-title">Distance</div>
+      <div id="metricDistance" class="metric-value">--</div>
+      <div id="subDistance" class="metric-sub">km</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon">❤️</div>
+      <div class="metric-title">Heart Points</div>
+      <div id="metricHeartPoints" class="metric-value">--</div>
+      <div class="metric-sub">pts</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon">⏱️</div>
+      <div class="metric-title">Move Time</div>
+      <div id="metricMoveMinutes" class="metric-value">--</div>
+      <div class="metric-sub">mins</div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon">🌙</div>
+      <div class="metric-title">Sleep</div>
+      <div id="metricSleep" class="metric-value">--</div>
+      <div id="subSleep" class="metric-sub">hours</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-title">Daily Activity Overview</div>
+    <canvas id="stepChart"></canvas>
+  </div>
+
+  <div class="recording-box">
+    <div>
+      <strong style="font-size: 0.85rem;">Background Step Recording</strong>
+      <div id="recordingStatus" style="font-size: 0.75rem; color: var(--text-secondary);">Subscription status unknown</div>
+    </div>
+    <button id="btnToggleRecording" class="btn btn-secondary">Subscribe</button>
+  </div>
+
+  <div class="table-section">
+    <div class="chart-title">Daily Breakdown</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Steps</th>
+          <th>Calories</th>
+          <th>Distance</th>
+          <th>Heart Pts</th>
+          <th>Move Mins</th>
+          <th>Sleep</th>
+        </tr>
+      </thead>
+      <tbody id="dailyTableBody">
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-secondary);">No data loaded.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    Last Updated: <span id="lastUpdated">Never</span> | On-Device Processing Only
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
