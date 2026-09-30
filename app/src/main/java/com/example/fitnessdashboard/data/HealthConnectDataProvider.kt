@@ -79,7 +79,7 @@ class HealthConnectDataProvider(
     override suspend fun requestPermissions(activity: Activity): PermissionResult = withContext(Dispatchers.Main) {
         PermissionResult(
             isGranted = false,
-            message = "Health Connect permissions must be requested using HealthConnect Permission Contract."
+            message = "Health Connect permissions must be requested via HealthConnect Permission Contract."
         )
     }
 
@@ -101,6 +101,8 @@ class HealthConnectDataProvider(
                     val records = client.readRecords(ReadRecordsRequest(StepsRecord::class, filter)).records
                     val total = records.sumOf { it.count }
                     MetricValue(total.toInt(), FitnessMetricStatus.AVAILABLE)
+                } catch (e: SecurityException) {
+                    MetricValue<Int>(null, FitnessMetricStatus.PERMISSION_DENIED, "Steps permission not granted in Health Connect")
                 } catch (e: Exception) {
                     MetricValue<Int>(null, FitnessMetricStatus.ERROR, e.localizedMessage)
                 }
@@ -110,6 +112,8 @@ class HealthConnectDataProvider(
                     val records = client.readRecords(ReadRecordsRequest(TotalCaloriesBurnedRecord::class, filter)).records
                     val total = records.sumOf { it.energy.inKilocalories }
                     MetricValue(total, FitnessMetricStatus.AVAILABLE)
+                } catch (e: SecurityException) {
+                    MetricValue<Double>(null, FitnessMetricStatus.PERMISSION_DENIED, "Calories permission not granted in Health Connect")
                 } catch (e: Exception) {
                     MetricValue<Double>(null, FitnessMetricStatus.ERROR, e.localizedMessage)
                 }
@@ -119,6 +123,8 @@ class HealthConnectDataProvider(
                     val records = client.readRecords(ReadRecordsRequest(DistanceRecord::class, filter)).records
                     val total = records.sumOf { it.distance.inMeters }
                     MetricValue(total, FitnessMetricStatus.AVAILABLE)
+                } catch (e: SecurityException) {
+                    MetricValue<Double>(null, FitnessMetricStatus.PERMISSION_DENIED, "Distance permission not granted in Health Connect")
                 } catch (e: Exception) {
                     MetricValue<Double>(null, FitnessMetricStatus.ERROR, e.localizedMessage)
                 }
@@ -128,6 +134,8 @@ class HealthConnectDataProvider(
                     val records = client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, filter)).records
                     val totalMinutes = records.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }
                     MetricValue(totalMinutes.toInt(), FitnessMetricStatus.AVAILABLE)
+                } catch (e: SecurityException) {
+                    MetricValue<Int>(null, FitnessMetricStatus.PERMISSION_DENIED, "Exercise permission not granted in Health Connect")
                 } catch (e: Exception) {
                     MetricValue<Int>(null, FitnessMetricStatus.UNSUPPORTED, "Move minutes/exercise read error")
                 }
@@ -137,11 +145,13 @@ class HealthConnectDataProvider(
                     val records = client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, filter)).records
                     val totalSleepMinutes = records.sumOf { Duration.between(it.startTime, it.endTime).toMinutes() }
                     MetricValue(totalSleepMinutes.toInt(), FitnessMetricStatus.AVAILABLE)
+                } catch (e: SecurityException) {
+                    MetricValue<Int>(null, FitnessMetricStatus.PERMISSION_DENIED, "Sleep permission not granted in Health Connect")
                 } catch (e: Exception) {
                     MetricValue<Int>(null, FitnessMetricStatus.ERROR, e.localizedMessage)
                 }
 
-                // 6. Heart points / Heart rate (Heart Points is Google Fit specific; in Health Connect return average HR or UNSUPPORTED)
+                // 6. Heart points (Specific to Google Fit)
                 val heartPointsResult = MetricValue<Double>(
                     null,
                     FitnessMetricStatus.UNSUPPORTED,

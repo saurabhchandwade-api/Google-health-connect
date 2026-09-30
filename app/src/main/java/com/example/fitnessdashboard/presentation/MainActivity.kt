@@ -13,10 +13,11 @@ import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.fitnessdashboard.data.GoogleFitDataProvider
+import com.example.fitnessdashboard.data.HealthConnectDataProvider
 import com.example.fitnessdashboard.databinding.ActivityMainBinding
 import com.example.fitnessdashboard.domain.model.PermissionStatus
 import com.example.fitnessdashboard.permissions.FitnessPermissionManager
@@ -60,6 +61,14 @@ class MainActivity : AppCompatActivity() {
             Logger.w("Google Sign-In authorization cancelled or failed. Code: ${result.resultCode}")
             showNativeFallback("Google Account sign-in/authorization was cancelled.")
         }
+    }
+
+    private val healthConnectPermissionLauncher = registerForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
+    ) { grantedPermissions ->
+        Logger.i("Health Connect permissions callback: granted count = ${grantedPermissions.size}")
+        binding.nativeFallbackContainer.visibility = View.GONE
+        viewModel.checkAvailabilityAndPermissions()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,6 +150,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun requestPermissions() {
+        val activeProvider = viewModel.repository.getActiveProvider()
+        if (activeProvider is HealthConnectDataProvider) {
+            Logger.i("Launching Health Connect permission request dialog.")
+            healthConnectPermissionLauncher.launch(activeProvider.requiredPermissions)
+            return
+        }
+
         val arStatus = permissionManager.checkActivityRecognitionPermission()
         if (arStatus != PermissionStatus.GRANTED) {
             val reqPermissions = FitnessPermissionManager.getRequiredPermissions()
@@ -157,22 +173,20 @@ class MainActivity : AppCompatActivity() {
             val result = viewModel.repository.requestPermissions(this@MainActivity)
             if (!result.isGranted) {
                 // Trigger Google Sign In flow if needed
-                val account = GoogleSignIn.getLastSignedInAccount(this@MainActivity)
-                val options = viewModel.repository.googleFitProvider.let {
-                    FitnessOptions.builder()
-                        .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.TYPE_CALORIES_EXPENDED, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.AGGREGATE_CALORIES_EXPENDED, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.TYPE_DISTANCE_DELTA, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.AGGREGATE_DISTANCE_DELTA, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.TYPE_HEART_POINTS, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.AGGREGATE_HEART_POINTS, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.TYPE_MOVE_MINUTES, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.AGGREGATE_MOVE_MINUTES, FitnessOptions.ACCESS_READ)
-                        .addDataType(DataType.TYPE_SLEEP_SEGMENT, FitnessOptions.ACCESS_READ)
-                        .build()
-                }
+                val options = FitnessOptions.builder()
+                    .addDataType(DataType.TYPE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.AGGREGATE_STEP_COUNT_DELTA, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.TYPE_CALORIES_EXPENDED, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.AGGREGATE_CALORIES_EXPENDED, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.TYPE_DISTANCE_DELTA, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.AGGREGATE_DISTANCE_DELTA, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.TYPE_HEART_POINTS, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.AGGREGATE_HEART_POINTS, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.TYPE_MOVE_MINUTES, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.AGGREGATE_MOVE_MINUTES, FitnessOptions.ACCESS_READ)
+                    .addDataType(DataType.TYPE_SLEEP_SEGMENT, FitnessOptions.ACCESS_READ)
+                    .build()
+
                 val signInClient = GoogleSignIn.getClient(
                     this@MainActivity,
                     GoogleSignInOptions.Builder(
