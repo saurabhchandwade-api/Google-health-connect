@@ -28,6 +28,13 @@ class JsonUtilsTest {
     }
 
     @Test
+    fun testParseOffsetDefaultsToZeroAndNeverGoesForward() {
+        assertEquals(-2, JsonUtils.parseOffset("{\"range\": \"WEEK\", \"offset\": -2}"))
+        assertEquals(0, JsonUtils.parseOffset("{\"range\": \"WEEK\"}"))
+        assertEquals(0, JsonUtils.parseOffset("{\"range\": \"WEEK\", \"offset\": 3}"))
+    }
+
+    @Test
     fun testErrorToJsonSerialization() {
         val error = FitnessError(
             code = FitnessErrorCode.PERMISSION_DENIED,
@@ -64,11 +71,11 @@ class JsonUtilsTest {
 
     @Test
     fun testProviderAvailabilityToJsonSerialization() {
-        val jsonStr = JsonUtils.toJson(ProviderAvailability.AVAILABLE, "GoogleFit")
+        val jsonStr = JsonUtils.toJson(ProviderAvailability.AVAILABLE, "HealthConnect")
         val jsonObj = JsonParser.parseString(jsonStr).asJsonObject
 
         assertTrue(jsonObj.get("success").asBoolean)
         assertEquals("AVAILABLE", jsonObj.get("availability").asString)
-        assertEquals("GoogleFit", jsonObj.get("provider").asString)
+        assertEquals("HealthConnect", jsonObj.get("provider").asString)
     }
 }

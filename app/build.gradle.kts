@@ -40,14 +40,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.activity.ktx)
 
-    implementation(libs.play.services.fitness)
-    implementation(libs.play.services.auth)
-
     implementation(libs.health.connect.client)
 
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.gson)
 

@@ -1,31 +1,71 @@
 (function () {
+  const DEFAULT_GOAL = 10000;
+  const GOAL_MIN = 1000;
+  const GOAL_MAX = 50000;
+  const GOAL_STEP = 500;
+  const GOAL_KEY = 'stepGoal';
+  const RING_LENGTH = 326.73; // circumference of the r=52 progress ring
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   let currentRange = 'TODAY';
-  let isSubscribed = false;
+  let periodOffset = 0; // 0 = current week or month, -1 = the one before, and so on
+  let stepGoal = loadGoal();
+  let goalDraft = stepGoal;
+  let lastPayload = null;
+  let hasPermission = false;
+  let isAvailable = true;
 
   const elements = {
-    providerBadge: document.getElementById('providerBadge'),
-    permissionBadge: document.getElementById('permissionBadge'),
-    providerSelect: document.getElementById('providerSelect'),
-    btnRequestPermission: document.getElementById('btnRequestPermission'),
+    welcomeScreen: document.getElementById('welcomeScreen'),
+    btnFetchStart: document.getElementById('btnFetchStart'),
+    dashboardContainer: document.getElementById('dashboardContainer'),
+    greeting: document.getElementById('greeting'),
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    lastUpdated: document.getElementById('lastUpdated'),
     btnRefresh: document.getElementById('btnRefresh'),
-    errorBanner: document.getElementById('errorBanner'),
-    errorMessage: document.getElementById('errorMessage'),
-    btnErrorAction: document.getElementById('btnErrorAction'),
+    btnBack: document.getElementById('btnBack'),
+    periodNav: document.getElementById('periodNav'),
+    btnPrevPeriod: document.getElementById('btnPrevPeriod'),
+    btnNextPeriod: document.getElementById('btnNextPeriod'),
+    periodTitle: document.getElementById('periodTitle'),
+    periodDates: document.getElementById('periodDates'),
+    btnEditGoal: document.getElementById('btnEditGoal'),
+    goalValue: document.getElementById('goalValue'),
+    goalSheet: document.getElementById('goalSheet'),
+    goalDraft: document.getElementById('goalDraft'),
+    btnGoalDown: document.getElementById('btnGoalDown'),
+    btnGoalUp: document.getElementById('btnGoalUp'),
+    btnGoalCancel: document.getElementById('btnGoalCancel'),
+    btnGoalSave: document.getElementById('btnGoalSave'),
+    goalPresets: document.querySelectorAll('.goal-presets button'),
+    notice: document.getElementById('notice'),
+    rangeThumb: document.getElementById('rangeThumb'),
     rangeButtons: document.querySelectorAll('.range-btn'),
+    hero: document.getElementById('hero'),
+    stepsRing: document.getElementById('stepsRing'),
     metricSteps: document.getElementById('metricSteps'),
+    stepsPercent: document.getElementById('stepsPercent'),
+    stepsCaption: document.getElementById('stepsCaption'),
+    subSteps: document.getElementById('subSteps'),
+    highlights: document.getElementById('highlights'),
+    bestDay: document.getElementById('bestDay'),
+    bestDaySteps: document.getElementById('bestDaySteps'),
+    goalDays: document.getElementById('goalDays'),
+    goalDaysTotal: document.getElementById('goalDaysTotal'),
+    goalDots: document.getElementById('goalDots'),
     metricCalories: document.getElementById('metricCalories'),
     metricDistance: document.getElementById('metricDistance'),
-    metricHeartPoints: document.getElementById('metricHeartPoints'),
     metricMoveMinutes: document.getElementById('metricMoveMinutes'),
     metricSleep: document.getElementById('metricSleep'),
-    subSteps: document.getElementById('subSteps'),
-    subDistance: document.getElementById('subDistance'),
-    subSleep: document.getElementById('subSleep'),
-    stepChart: document.getElementById('stepChart'),
-    dailyTableBody: document.getElementById('dailyTableBody'),
-    recordingStatus: document.getElementById('recordingStatus'),
-    btnToggleRecording: document.getElementById('btnToggleRecording'),
-    lastUpdated: document.getElementById('lastUpdated')
+    sleepTitle: document.getElementById('sleepTitle'),
+    sparkCalories: document.getElementById('sparkCalories'),
+    sparkDistance: document.getElementById('sparkDistance'),
+    sparkMove: document.getElementById('sparkMove'),
+    sparkSleep: document.getElementById('sparkSleep'),
+    activityChart: document.getElementById('activityChart'),
+    chartDetail: document.getElementById('chartDetail'),
+    dailyList: document.getElementById('dailyList')
   };
 
   // Safe wrapper for calling Android native bridge
@@ -41,248 +81,595 @@
     }
   }
 
-  // Initial load
+  // Initial setup
   document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.reveal').forEach((el, i) => el.style.setProperty('--i', i));
+    setGreeting();
+    elements.goalValue.textContent = stepGoal.toLocaleString();
     setupEventListeners();
-    callNative('checkProviderAvailability');
-    callNative('checkFitnessPermissions');
-    fetchData(currentRange);
   });
 
+  function setGreeting() {
+    const hour = new Date().getHours();
+    elements.greeting.textContent = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  }
+
   function setupEventListeners() {
+    elements.btnFetchStart.addEventListener('click', function () {
+      elements.welcomeScreen.style.display = 'none';
+      elements.dashboardContainer.style.display = 'block';
+
+      callNative('checkProviderAvailability');
+      // Data is fetched once the permission status comes back
+      callNative('checkFitnessPermissions');
+    });
+
+    elements.btnBack.addEventListener('click', function () {
+      closeGoalSheet();
+      elements.dashboardContainer.style.display = 'none';
+      elements.welcomeScreen.style.display = 'block';
+    });
+
+    // Refresh doubles as the way back in when access was declined
     elements.btnRefresh.addEventListener('click', function () {
-      fetchData(currentRange);
+      if (hasPermission) {
+        fetchData(currentRange);
+      } else {
+        callNative('requestFitnessPermissions');
+      }
     });
 
-    elements.btnRequestPermission.addEventListener('click', function () {
-      callNative('requestFitnessPermissions');
-    });
-
-    elements.providerSelect.addEventListener('change', function (e) {
-      const selected = e.target.value;
-      callNative('selectProvider', selected);
-      setTimeout(() => fetchData(currentRange), 300);
-    });
-
-    elements.rangeButtons.forEach(btn => {
+    elements.rangeButtons.forEach((btn, index) => {
       btn.addEventListener('click', function () {
         elements.rangeButtons.forEach(b => b.classList.remove('active'));
         this.classList.add('active');
+        elements.rangeThumb.style.transform = 'translateX(' + (index * 100) + '%)';
         currentRange = this.getAttribute('data-range');
+        periodOffset = 0;
+        updatePeriodNav();
         fetchData(currentRange);
       });
     });
 
-    elements.btnToggleRecording.addEventListener('click', function () {
-      if (isSubscribed) {
-        callNative('unsubscribeFromFitnessRecording');
-      } else {
-        callNative('subscribeToFitnessRecording');
-      }
+    elements.btnPrevPeriod.addEventListener('click', () => shiftPeriod(-1));
+    elements.btnNextPeriod.addEventListener('click', () => shiftPeriod(1));
+
+    elements.btnEditGoal.addEventListener('click', openGoalSheet);
+    elements.btnGoalDown.addEventListener('click', () => setGoalDraft(goalDraft - GOAL_STEP));
+    elements.btnGoalUp.addEventListener('click', () => setGoalDraft(goalDraft + GOAL_STEP));
+    elements.goalPresets.forEach(btn => {
+      btn.addEventListener('click', () => setGoalDraft(Number(btn.getAttribute('data-goal'))));
+    });
+    elements.btnGoalCancel.addEventListener('click', closeGoalSheet);
+    elements.btnGoalSave.addEventListener('click', saveGoal);
+    elements.goalSheet.addEventListener('click', function (event) {
+      if (event.target === elements.goalSheet) closeGoalSheet();
     });
 
-    elements.btnErrorAction.addEventListener('click', function () {
-      callNative('requestFitnessPermissions');
-    });
+    elements.activityChart.addEventListener('click', onChartTap);
   }
 
   function fetchData(range) {
-    const requestJson = JSON.stringify({ range: range });
+    elements.btnRefresh.classList.add('loading');
+    const requestJson = JSON.stringify({ range: range, offset: periodOffset });
     callNative('getFitnessData', requestJson);
+  }
+
+  // --- PREVIOUS WEEKS AND MONTHS ---
+
+  function shiftPeriod(delta) {
+    const next = periodOffset + delta;
+    if (next > 0) return;
+    periodOffset = next;
+    updatePeriodNav();
+    fetchData(currentRange);
+  }
+
+  function updatePeriodNav() {
+    if (currentRange === 'TODAY') {
+      elements.periodNav.style.display = 'none';
+      return;
+    }
+    elements.periodNav.style.display = 'flex';
+    elements.btnNextPeriod.disabled = periodOffset === 0;
+
+    const unit = currentRange === 'WEEK' ? 'week' : 'month';
+    elements.periodTitle.textContent = periodOffset === 0 ? 'This ' + unit
+      : periodOffset === -1 ? 'Last ' + unit
+      : -periodOffset + ' ' + unit + 's ago';
+
+    const now = new Date();
+    if (currentRange === 'WEEK') {
+      // Weeks run Monday to Sunday, matching the native range
+      const mondayOffset = (now.getDay() + 6) % 7;
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset + periodOffset * 7);
+      const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+      const short = d => d.toLocaleDateString([], { day: 'numeric', month: 'short' });
+      elements.periodDates.textContent = short(monday) + ' – ' + short(sunday);
+    } else {
+      const month = new Date(now.getFullYear(), now.getMonth() + periodOffset, 1);
+      elements.periodDates.textContent = month.toLocaleDateString([], { month: 'long', year: 'numeric' });
+    }
+  }
+
+  // --- DAILY GOAL ---
+
+  function loadGoal() {
+    try {
+      const saved = parseInt(localStorage.getItem(GOAL_KEY), 10);
+      if (saved >= GOAL_MIN && saved <= GOAL_MAX) return saved;
+    } catch (err) {
+      console.warn('Could not read saved goal:', err);
+    }
+    return DEFAULT_GOAL;
+  }
+
+  function setGoalDraft(value) {
+    goalDraft = Math.max(GOAL_MIN, Math.min(GOAL_MAX, value));
+    elements.goalDraft.textContent = goalDraft.toLocaleString();
+    elements.btnGoalDown.disabled = goalDraft <= GOAL_MIN;
+    elements.btnGoalUp.disabled = goalDraft >= GOAL_MAX;
+    elements.goalPresets.forEach(btn => {
+      btn.classList.toggle('active', Number(btn.getAttribute('data-goal')) === goalDraft);
+    });
+  }
+
+  function openGoalSheet() {
+    setGoalDraft(stepGoal);
+    elements.goalSheet.style.display = 'flex';
+  }
+
+  function closeGoalSheet() {
+    elements.goalSheet.style.display = 'none';
+  }
+
+  function saveGoal() {
+    stepGoal = goalDraft;
+    try {
+      localStorage.setItem(GOAL_KEY, String(stepGoal));
+    } catch (err) {
+      console.warn('Could not save goal:', err);
+    }
+    elements.goalValue.textContent = stepGoal.toLocaleString();
+    closeGoalSheet();
+    render();
+  }
+
+  function showNotice(message) {
+    elements.notice.textContent = message;
+    elements.notice.style.display = 'block';
+  }
+
+  function hideNotice() {
+    elements.notice.style.display = 'none';
+  }
+
+  function setStatus(connected, text) {
+    elements.statusDot.classList.toggle('on', connected);
+    elements.statusText.textContent = text;
   }
 
   // --- NATIVE CALLBACKS ---
 
   window.onFitnessDataReceived = function (payload) {
-    elements.errorBanner.style.display = 'none';
-    elements.lastUpdated.textContent = new Date().toLocaleTimeString();
+    elements.btnRefresh.classList.remove('loading');
 
     if (!payload || !payload.data) return;
+    // Ignore a late response for a range the user has already switched away from
+    if (payload.range && payload.range !== currentRange) return;
+    if (payload.offset != null && payload.offset !== periodOffset) return;
 
-    const summary = payload.data.summary || {};
-    const days = payload.data.days || [];
+    elements.lastUpdated.textContent = 'Updated ' +
+      new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
-    if (payload.provider) {
-      elements.providerBadge.textContent = payload.provider;
-    }
-
-    renderSummary(summary);
-    renderDailyTable(days);
-    renderChart(days);
+    lastPayload = payload;
+    render();
   };
 
-  window.onFitnessError = function (errorPayload) {
-    if (!errorPayload) return;
-    elements.errorMessage.textContent = errorPayload.message || 'An error occurred reading fitness data.';
-    elements.errorBanner.style.display = 'flex';
+  // Draws the most recent data; also used to redraw after the goal changes
+  function render() {
+    if (!lastPayload) return;
+    const payload = lastPayload;
 
-    if (errorPayload.errorCode === 'PERMISSION_DENIED') {
-      elements.permissionBadge.textContent = 'Denied';
-      elements.permissionBadge.className = 'badge badge-danger';
-    }
+    const summary = payload.data.summary || {};
+    const today = toDateKey(new Date());
+    const days = payload.data.days || [];
+    const elapsedDays = days.filter(d => d.date && d.date <= today);
+
+    renderSummary(summary, elapsedDays);
+    renderHighlights(days, elapsedDays, today);
+    renderSparklines(elapsedDays);
+    renderDailyList(elapsedDays, today);
+    renderActivityChart(days, today);
+  }
+
+  window.onFitnessError = function (errorPayload) {
+    elements.btnRefresh.classList.remove('loading');
+    if (!errorPayload) return;
+    showNotice(errorPayload.message || 'Something went wrong reading your fitness data.');
   };
 
   window.onPermissionStatus = function (statusPayload) {
-    if (!statusPayload) return;
-    if (statusPayload.isGranted || statusPayload.success) {
-      elements.permissionBadge.textContent = 'Connected';
-      elements.permissionBadge.className = 'badge badge-success';
-      elements.errorBanner.style.display = 'none';
+    if (!statusPayload || !isAvailable) return;
+    hasPermission = !!(statusPayload.isGranted || statusPayload.success);
+    if (hasPermission) {
+      setStatus(true, 'Health Connect');
+      hideNotice();
       fetchData(currentRange);
     } else {
-      elements.permissionBadge.textContent = 'Not Granted';
-      elements.permissionBadge.className = 'badge badge-danger';
+      setStatus(false, 'Not connected');
+      showNotice('Health Connect access is off. Tap refresh to allow access, or turn it on in Health Connect settings.');
     }
   };
 
   window.onAvailabilityStatus = function (availabilityPayload) {
     if (!availabilityPayload) return;
-    const isAvail = availabilityPayload.availability === 'AVAILABLE' || availabilityPayload.success;
-    if (isAvail) {
-      elements.providerBadge.textContent = availabilityPayload.provider || 'Available';
-      elements.providerBadge.className = 'badge badge-success';
-    } else {
-      elements.providerBadge.textContent = availabilityPayload.availability || 'Unavailable';
-      elements.providerBadge.className = 'badge badge-warning';
+    isAvailable = availabilityPayload.availability === 'AVAILABLE';
+    if (!isAvailable) {
+      setStatus(false, 'Not connected');
+      showNotice(availabilityPayload.availability === 'NOT_INSTALLED'
+        ? 'Health Connect needs to be installed or updated on this device.'
+        : 'Health Connect is not supported on this device.');
     }
   };
 
-  window.onSubscriptionStatus = function (subPayload) {
-    if (!subPayload) return;
-    isSubscribed = subPayload.isSubscribed;
-    elements.recordingStatus.textContent = subPayload.message || (isSubscribed ? 'Active' : 'Inactive');
-    elements.btnToggleRecording.textContent = isSubscribed ? 'Unsubscribe' : 'Subscribe';
-    elements.btnToggleRecording.className = isSubscribed ? 'btn btn-secondary' : 'btn btn-primary';
-  };
+  // --- HELPERS ---
 
-  // --- RENDERING HELPERS ---
-
-  function renderSummary(summary) {
-    // Steps
-    if (summary.steps != null) {
-      elements.metricSteps.textContent = summary.steps.toLocaleString();
-      const pct = Math.min(100, Math.round((summary.steps / 10000) * 100));
-      elements.subSteps.textContent = pct + '% of 10,000 goal';
-    } else {
-      elements.metricSteps.textContent = 'N/A';
-      elements.subSteps.textContent = 'No data available';
-    }
-
-    // Calories
-    if (summary.caloriesKcal != null) {
-      elements.metricCalories.textContent = summary.caloriesKcal.toFixed(1);
-    } else {
-      elements.metricCalories.textContent = 'N/A';
-    }
-
-    // Distance
-    if (summary.distanceMeters != null) {
-      const km = (summary.distanceMeters / 1000).toFixed(2);
-      elements.metricDistance.textContent = km;
-      elements.subDistance.textContent = summary.distanceMeters.toFixed(0) + ' m';
-    } else {
-      elements.metricDistance.textContent = 'N/A';
-      elements.subDistance.textContent = 'km';
-    }
-
-    // Heart Points
-    if (summary.heartPoints != null) {
-      elements.metricHeartPoints.textContent = summary.heartPoints.toFixed(1);
-    } else {
-      elements.metricHeartPoints.textContent = 'N/A';
-    }
-
-    // Move Minutes
-    if (summary.moveMinutes != null) {
-      elements.metricMoveMinutes.textContent = summary.moveMinutes;
-    } else {
-      elements.metricMoveMinutes.textContent = 'N/A';
-    }
-
-    // Sleep
-    if (summary.sleepDurationMinutes != null) {
-      const hours = (summary.sleepDurationMinutes / 60).toFixed(1);
-      elements.metricSleep.textContent = hours;
-      elements.subSleep.textContent = summary.sleepDurationMinutes + ' mins total';
-    } else {
-      elements.metricSleep.textContent = 'N/A';
-      elements.subSleep.textContent = 'hours';
-    }
+  function toDateKey(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
   }
 
-  function renderDailyTable(days) {
-    if (!days || days.length === 0) {
-      elements.dailyTableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No fitness records found.</td></tr>';
+  function parseDateKey(key) {
+    const parts = key.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+
+  function metric(day, key) {
+    return (day[key] && day[key].value != null) ? day[key].value : null;
+  }
+
+  function formatDuration(minutes) {
+    minutes = Math.round(minutes);
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return m + 'm';
+    return m === 0 ? h + 'h' : h + 'h ' + m + 'm';
+  }
+
+  function formatInt(value) {
+    return Math.round(value).toLocaleString();
+  }
+
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  // Counts a number up (or down) from the value the element last showed
+  const numberState = new WeakMap();
+
+  function animateNumber(el, to, format) {
+    const state = numberState.get(el) || { value: 0, run: 0 };
+    const from = state.value;
+    const run = state.run + 1;
+    numberState.set(el, { value: to == null ? 0 : to, run: run });
+
+    if (to == null) {
+      el.textContent = '--';
+      return;
+    }
+    if (reduceMotion || from === to) {
+      el.textContent = format(to);
       return;
     }
 
+    const start = performance.now();
+    function tick(now) {
+      if (numberState.get(el).run !== run) return; // superseded by a newer value
+      const t = Math.min(1, (now - start) / 900);
+      el.textContent = format(from + (to - from) * easeOut(t));
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function dayLabel(dateKey, todayKey) {
+    if (dateKey === todayKey) return 'Today';
+    const date = parseDateKey(dateKey);
+    const daysAgo = Math.round((parseDateKey(todayKey) - date) / 86400000);
+    if (daysAgo === 1) return 'Yesterday';
+    if (daysAgo < 7) return date.toLocaleDateString([], { weekday: 'long' });
+    return date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+  }
+
+  // --- RENDERING ---
+
+  function renderSummary(summary, elapsedDays) {
+    const dayCount = Math.max(1, elapsedDays.length);
+    const isMultiDay = dayCount > 1;
+
+    // Steps: progress is measured against the daily goal, using the daily average for longer ranges
+    const steps = summary.steps;
+    const average = steps != null ? Math.round(steps / dayCount) : 0;
+    const pct = Math.min(100, Math.round((average / stepGoal) * 100));
+
+    animateNumber(elements.metricSteps, steps, formatInt);
+    animateNumber(elements.stepsPercent, pct, v => Math.round(v) + '%');
+    elements.stepsRing.style.strokeDashoffset = RING_LENGTH * (1 - pct / 100);
+    elements.hero.classList.toggle('goal-hit', pct >= 100);
+    elements.stepsCaption.textContent = isMultiDay ? 'of daily goal, on average' : 'of daily goal';
+
+    if (steps == null) {
+      elements.subSteps.textContent = 'No step data yet';
+    } else if (isMultiDay) {
+      elements.subSteps.textContent = average.toLocaleString() + ' steps a day';
+    } else if (steps >= stepGoal) {
+      elements.subSteps.textContent = 'Goal reached. Great work!';
+    } else if (steps === 0) {
+      elements.subSteps.textContent = 'Take your first steps today';
+    } else {
+      elements.subSteps.textContent = (stepGoal - steps).toLocaleString() + ' steps to go';
+    }
+
+    animateNumber(elements.metricCalories, summary.caloriesKcal, formatInt);
+    animateNumber(elements.metricDistance,
+      summary.distanceMeters != null ? summary.distanceMeters / 1000 : null, v => v.toFixed(2));
+    animateNumber(elements.metricMoveMinutes, summary.moveMinutes, formatInt);
+
+    // Sleep: a nightly average reads better than a multi-day total
+    const nights = elapsedDays.filter(d => metric(d, 'sleepDurationMinutes') > 0).length;
+    elements.sleepTitle.textContent = isMultiDay ? 'Sleep (avg / night)' : 'Sleep';
+    let sleep = summary.sleepDurationMinutes > 0 ? summary.sleepDurationMinutes : null;
+    if (sleep != null && isMultiDay && nights > 0) sleep = sleep / nights;
+    animateNumber(elements.metricSleep, sleep, formatDuration);
+  }
+
+  // Best day and goal streak, only meaningful for week and month
+  function renderHighlights(days, elapsedDays, todayKey) {
+    if (elapsedDays.length < 2) {
+      elements.highlights.style.display = 'none';
+      return;
+    }
+    elements.highlights.style.display = 'grid';
+
+    let best = null;
+    elapsedDays.forEach(day => {
+      const steps = metric(day, 'steps') || 0;
+      if (steps > 0 && (!best || steps > metric(best, 'steps'))) best = day;
+    });
+    elements.bestDay.textContent = best ? dayLabel(best.date, todayKey) : '--';
+    elements.bestDaySteps.textContent = best ? metric(best, 'steps').toLocaleString() + ' steps' : 'No steps yet';
+
+    const goalDays = elapsedDays.filter(d => metric(d, 'steps') >= stepGoal).length;
+    animateNumber(elements.goalDays, goalDays, formatInt);
+    elements.goalDaysTotal.textContent = ' of ' + elapsedDays.length + ' days';
+
+    // One dot per day in the range: filled when the goal was met, hollow for days still to come
+    elements.goalDots.innerHTML = days.map((day, i) => {
+      const state = day.date > todayKey ? '' : (metric(day, 'steps') >= stepGoal ? 'hit' : 'miss');
+      return `<span class="${state}" style="--i: ${i}"></span>`;
+    }).join('');
+  }
+
+  function renderSparkline(svg, values) {
+    const max = Math.max(...values);
+    // Nothing worth drawing for a single day or an all-zero series
+    if (values.length < 2 || max <= 0) {
+      svg.classList.remove('on');
+      return;
+    }
+
+    const points = values.map((v, i) => {
+      const x = (i / (values.length - 1)) * 100;
+      const y = 26 - (v / max) * 24;
+      return x.toFixed(1) + ' ' + y.toFixed(1);
+    });
+    const line = 'M' + points.join(' L');
+    svg.innerHTML = `<path class="area" d="${line} L100 28 L0 28 Z"/><path class="line" d="${line}"/>`;
+
+    // Restart the reveal animation
+    svg.classList.remove('on');
+    void svg.getBoundingClientRect();
+    svg.classList.add('on');
+  }
+
+  function renderSparklines(elapsedDays) {
+    const series = key => elapsedDays.map(d => metric(d, key) || 0);
+    renderSparkline(elements.sparkCalories, series('calories'));
+    renderSparkline(elements.sparkDistance, series('distanceMeters'));
+    renderSparkline(elements.sparkMove, series('moveMinutes'));
+    renderSparkline(elements.sparkSleep, series('sleepDurationMinutes'));
+  }
+
+  function renderDailyList(days, todayKey) {
+    if (!days || days.length === 0) {
+      elements.dailyList.innerHTML = '<li class="day-empty">No fitness records found.</li>';
+      return;
+    }
+
+    const check = '<svg class="day-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
     let html = '';
-    days.forEach(day => {
-      const dateStr = day.date || '';
-      const steps = (day.steps && day.steps.value != null) ? day.steps.value.toLocaleString() : '-';
-      const calories = (day.calories && day.calories.value != null) ? day.calories.value.toFixed(0) : '-';
-      const distance = (day.distanceMeters && day.distanceMeters.value != null) ? (day.distanceMeters.value / 1000).toFixed(2) + ' km' : '-';
-      const hp = (day.heartPoints && day.heartPoints.value != null) ? day.heartPoints.value.toFixed(1) : '-';
-      const move = (day.moveMinutes && day.moveMinutes.value != null) ? day.moveMinutes.value + 'm' : '-';
-      const sleep = (day.sleepDurationMinutes && day.sleepDurationMinutes.value != null) ? (day.sleepDurationMinutes.value / 60).toFixed(1) + 'h' : '-';
+    // Most recent day first
+    days.slice().reverse().forEach((day, i) => {
+      const steps = metric(day, 'steps');
+      const calories = metric(day, 'calories');
+      const distance = metric(day, 'distanceMeters');
+      const move = metric(day, 'moveMinutes');
+      const sleep = metric(day, 'sleepDurationMinutes');
+
+      const meta = [];
+      if (calories > 0) meta.push(formatInt(calories) + ' kcal');
+      if (distance > 0) meta.push((distance / 1000).toFixed(2) + ' km');
+      if (move > 0) meta.push(move + ' min active');
+      if (sleep > 0) meta.push(formatDuration(sleep) + ' sleep');
+
+      const pct = Math.min(100, Math.round(((steps || 0) / stepGoal) * 100));
 
       html += `
-        <tr>
-          <td><strong>${dateStr}</strong></td>
-          <td>${steps}</td>
-          <td>${calories}</td>
-          <td>${distance}</td>
-          <td>${hp}</td>
-          <td>${move}</td>
-          <td>${sleep}</td>
-        </tr>
+        <li class="day-row" style="--i: ${Math.min(i, 8)}">
+          <div class="day-main">
+            <span class="day-name">${dayLabel(day.date, todayKey)}${steps >= stepGoal ? check : ''}</span>
+            <span class="day-steps"><strong>${steps != null ? steps.toLocaleString() : '--'}</strong> steps</span>
+          </div>
+          <div class="day-bar"><span data-width="${pct}"></span></div>
+          <div class="day-meta">${meta.length ? meta.map(m => `<span>${m}</span>`).join('') : '<span class="none">No other activity recorded</span>'}</div>
+        </li>
       `;
     });
 
-    elements.dailyTableBody.innerHTML = html;
+    elements.dailyList.innerHTML = html;
+
+    // Set widths on the next frame so the bars animate in from zero
+    requestAnimationFrame(() => {
+      elements.dailyList.querySelectorAll('.day-bar span').forEach(bar => {
+        bar.style.width = bar.getAttribute('data-width') + '%';
+      });
+    });
   }
 
-  function renderChart(days) {
-    const canvas = elements.stepChart;
-    if (!canvas) return;
+  // --- VISUALIZATION: Animated bar chart of daily steps ---
 
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width = canvas.parentElement.clientWidth || 300;
-    const height = canvas.height = 160;
+  const chart = { days: [], today: '', selected: -1, progress: 1, frame: 0, paddingLeft: 28, slot: 0 };
 
-    ctx.clearRect(0, 0, width, height);
+  function renderActivityChart(days, todayKey) {
+    chart.days = days || [];
+    chart.today = todayKey;
+    chart.selected = -1;
+    updateChartDetail();
 
-    if (!days || days.length === 0) {
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('No activity data to chart', width / 3, height / 2);
+    cancelAnimationFrame(chart.frame);
+    if (reduceMotion) {
+      chart.progress = 1;
+      drawChart();
       return;
     }
 
-    const maxSteps = Math.max(10000, ...days.map(d => (d.steps && d.steps.value) || 0));
-    const padding = 30;
-    const chartWidth = width - padding * 2;
-    const chartHeight = height - padding * 2;
-    const barWidth = Math.max(8, (chartWidth / days.length) - 8);
+    // Bars grow up from the baseline
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min(1, (now - start) / 800);
+      chart.progress = easeOut(t);
+      drawChart();
+      if (t < 1) chart.frame = requestAnimationFrame(step);
+    }
+    chart.frame = requestAnimationFrame(step);
+  }
+
+  function onChartTap(event) {
+    if (!chart.slot) return;
+    const rect = elements.activityChart.getBoundingClientRect();
+    const index = Math.floor((event.clientX - rect.left - chart.paddingLeft) / chart.slot);
+    const day = chart.days[index];
+    if (!day || day.date > chart.today) return;
+
+    chart.selected = chart.selected === index ? -1 : index;
+    updateChartDetail();
+    drawChart();
+  }
+
+  function updateChartDetail() {
+    const day = chart.days[chart.selected];
+    elements.chartDetail.textContent = day
+      ? dayLabel(day.date, chart.today) + ' · ' + (metric(day, 'steps') || 0).toLocaleString() + ' steps'
+      : 'Tap a bar for details';
+  }
+
+  function roundedBar(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, width, height, Math.min(radius, height / 2));
+    } else {
+      ctx.rect(x, y, width, height);
+    }
+    ctx.fill();
+  }
+
+  function drawChart() {
+    const canvas = elements.activityChart;
+    const days = chart.days;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 280;
+    const height = canvas.clientHeight || 170;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = '10px sans-serif';
+
+    if (days.length === 0) {
+      ctx.fillStyle = '#6e787e';
+      ctx.textAlign = 'center';
+      ctx.fillText('No activity data available', width / 2, height / 2);
+      return;
+    }
+
+    const maxSteps = Math.max(stepGoal * 1.2, ...days.map(d => metric(d, 'steps') || 0));
+    const paddingLeft = chart.paddingLeft;
+    const paddingBottom = 22;
+    const paddingTop = 8;
+    const chartHeight = height - paddingBottom - paddingTop;
+    const baseline = height - paddingBottom;
+    const slot = (width - paddingLeft) / days.length;
+    const barWidth = Math.max(3, Math.min(26, slot * 0.58));
+    const radius = barWidth / 2;
+    chart.slot = slot;
+
+    const gradient = ctx.createLinearGradient(0, paddingTop, 0, baseline);
+    gradient.addColorStop(0, '#3bb896');
+    gradient.addColorStop(1, '#10847e');
+
+    const labelEvery = Math.ceil(days.length / 7);
 
     days.forEach((day, i) => {
-      const steps = (day.steps && day.steps.value) || 0;
-      const barHeight = (steps / maxSteps) * chartHeight;
-      const x = padding + i * (barWidth + 8);
-      const y = height - padding - barHeight;
+      const steps = metric(day, 'steps') || 0;
+      const barHeight = (steps / maxSteps) * chartHeight * chart.progress;
+      const x = paddingLeft + i * slot + (slot - barWidth) / 2;
+      const isSelected = i === chart.selected;
+      const isToday = day.date === chart.today;
 
-      // Draw bar
-      ctx.fillStyle = '#3b82f6';
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x, y, barWidth, barHeight, [4, 4, 0, 0]) : ctx.rect(x, y, barWidth, barHeight);
-      ctx.fill();
+      // Faint full-height track behind each bar
+      ctx.fillStyle = '#e6fcf6';
+      roundedBar(ctx, x, paddingTop, barWidth, chartHeight, radius);
 
-      // Draw label below
-      const label = day.date ? day.date.slice(5) : '';
-      ctx.fillStyle = '#64748b';
-      ctx.font = '10px sans-serif';
-      ctx.fillText(label, x, height - 10);
+      if (barHeight > 0) {
+        ctx.globalAlpha = chart.selected >= 0 && !isSelected ? 0.4 : 1;
+        ctx.fillStyle = isSelected ? '#0d4f44' : gradient;
+        roundedBar(ctx, x, baseline - barHeight, barWidth, barHeight, radius);
+        ctx.globalAlpha = 1;
+      }
+
+      // X labels: weekday for short ranges, day of month for longer ones
+      if (day.date && i % labelEvery === 0) {
+        const date = parseDateKey(day.date);
+        const label = days.length <= 7
+          ? date.toLocaleDateString([], { weekday: 'short' })
+          : String(date.getDate());
+        ctx.fillStyle = isToday || isSelected ? '#10847e' : '#6e787e';
+        ctx.font = (isToday || isSelected ? 'bold ' : '') + '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(label, x + barWidth / 2, height - 5);
+      }
     });
+
+    // Daily goal line
+    const goalY = baseline - (stepGoal / maxSteps) * chartHeight;
+    ctx.strokeStyle = '#10847e';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, goalY);
+    ctx.lineTo(width, goalY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#6e787e';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(+(stepGoal / 1000).toFixed(1) + 'k', 0, goalY);
   }
 
 })();

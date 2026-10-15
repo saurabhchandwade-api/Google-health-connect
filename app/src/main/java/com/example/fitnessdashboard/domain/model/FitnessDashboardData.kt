@@ -7,5 +7,5 @@ data class FitnessDashboardData(
     val summary: FitnessSummary,
     val days: List<FitnessDayData>,
     val generatedAt: Instant = Instant.now(),
-    val providerName: String = "GoogleFit"
+    val providerName: String = "HealthConnect"
 )

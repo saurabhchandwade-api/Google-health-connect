@@ -8,7 +8,6 @@ import com.example.fitnessdashboard.domain.model.FitnessDashboardData
 import com.example.fitnessdashboard.domain.model.PermissionStatus
 import com.example.fitnessdashboard.domain.model.ProviderAvailability
 import com.example.fitnessdashboard.domain.model.RangeType
-import com.example.fitnessdashboard.domain.model.SubscriptionResult
 import com.example.fitnessdashboard.util.DateRangeUtils
 import com.example.fitnessdashboard.util.Logger
 import kotlinx.coroutines.Dispatchers
@@ -21,11 +20,10 @@ import kotlinx.coroutines.launch
 data class MainUiState(
     val isLoading: Boolean = false,
     val providerAvailability: ProviderAvailability = ProviderAvailability.AVAILABLE,
-    val activeProviderName: String = "GoogleFit",
+    val activeProviderName: String = "HealthConnect",
     val permissionStatus: PermissionStatus = PermissionStatus.NOT_GRANTED,
     val currentRangeType: RangeType = RangeType.TODAY,
     val dashboardData: FitnessDashboardData? = null,
-    val subscriptionResult: SubscriptionResult? = null,
     val errorMessage: String? = null
 )
 
@@ -47,7 +45,7 @@ class MainViewModel @JvmOverloads constructor(
             try {
                 val availability = repository.checkAvailability()
                 val permissions = repository.checkPermissions()
-                val providerName = repository.getActiveProvider().name
+                val providerName = repository.providerName
 
                 _uiState.update {
                     it.copy(
@@ -95,27 +93,6 @@ class MainViewModel @JvmOverloads constructor(
                     )
                 }
             }
-        }
-    }
-
-    fun selectProvider(providerName: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.selectProvider(providerName)
-            checkAvailabilityAndPermissions()
-        }
-    }
-
-    fun subscribeToRecording() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = repository.subscribeToRecording()
-            _uiState.update { it.copy(subscriptionResult = result) }
-        }
-    }
-
-    fun unsubscribeFromRecording() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = repository.unsubscribeFromRecording()
-            _uiState.update { it.copy(subscriptionResult = result) }
         }
     }
 }
