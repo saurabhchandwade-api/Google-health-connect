@@ -84,4 +84,25 @@ class DateRangeUtilsTest {
         assertEquals(13, dailyBounds.first().first.dayOfMonth)
         assertEquals(19, dailyBounds.last().first.dayOfMonth)
     }
+
+    @Test
+    fun testOffsetStepsBackWholeWeeksAndMonths() {
+        val thisWeek = DateRangeUtils.calculateDateRange(RangeType.WEEK, zoneId = testZone)
+        val lastWeek = DateRangeUtils.calculateDateRange(RangeType.WEEK, zoneId = testZone, offset = -1)
+        assertEquals(
+            thisWeek.start.atZone(testZone).toLocalDate().minusWeeks(1),
+            lastWeek.start.atZone(testZone).toLocalDate()
+        )
+        assertEquals(7, DateRangeUtils.getDailyBoundsForRange(lastWeek).size)
+
+        val thisMonth = DateRangeUtils.calculateDateRange(RangeType.MONTH, zoneId = testZone)
+        val lastMonth = DateRangeUtils.calculateDateRange(RangeType.MONTH, zoneId = testZone, offset = -1)
+        val lastMonthStart = lastMonth.start.atZone(testZone).toLocalDate()
+        assertEquals(thisMonth.start.atZone(testZone).toLocalDate().minusMonths(1), lastMonthStart)
+        assertEquals(1, lastMonthStart.dayOfMonth)
+        assertEquals(
+            thisMonth.start.atZone(testZone).toLocalDate().minusDays(1),
+            lastMonth.end.atZone(testZone).toLocalDate()
+        )
+    }
 }

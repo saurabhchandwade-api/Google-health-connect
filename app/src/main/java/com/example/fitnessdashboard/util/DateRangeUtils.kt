@@ -16,13 +16,15 @@ object DateRangeUtils {
         type: RangeType,
         customStart: Instant? = null,
         customEnd: Instant? = null,
-        zoneId: ZoneId = ZoneId.systemDefault()
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        offset: Int = 0
     ): FitnessDateRange {
         val now = ZonedDateTime.now(zoneId)
+        // offset steps back whole weeks or months: 0 is the current one, -1 the one before
         return when (type) {
             RangeType.TODAY -> getTodayRange(now.toLocalDate(), zoneId)
-            RangeType.WEEK -> getWeekRange(now.toLocalDate(), zoneId)
-            RangeType.MONTH -> getMonthRange(now.toLocalDate(), zoneId)
+            RangeType.WEEK -> getWeekRange(now.toLocalDate().plusWeeks(offset.toLong()), zoneId)
+            RangeType.MONTH -> getMonthRange(now.toLocalDate().plusMonths(offset.toLong()), zoneId)
             RangeType.CUSTOM -> {
                 val start = customStart ?: now.with(LocalTime.MIN).toInstant()
                 val end = customEnd ?: now.with(LocalTime.MAX).toInstant()

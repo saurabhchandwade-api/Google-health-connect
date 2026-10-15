@@ -25,10 +25,6 @@ class WebViewCallbackDispatcher(private val webViewProvider: () -> WebView?) {
         evaluateJs("window.onAvailabilityStatus && window.onAvailabilityStatus($availabilityJson)")
     }
 
-    fun dispatchSubscriptionStatus(subscriptionJson: String) {
-        evaluateJs("window.onSubscriptionStatus && window.onSubscriptionStatus($subscriptionJson)")
-    }
-
     private fun evaluateJs(script: String) {
         mainHandler.post {
             val webView = webViewProvider()

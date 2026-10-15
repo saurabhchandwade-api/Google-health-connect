@@ -21,7 +21,8 @@ class FitnessJavascriptBridge(
     private val activity: Activity,
     private val repository: FitnessRepository,
     private val dispatcher: WebViewCallbackDispatcher,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val onRequestPermissions: () -> Unit
 ) {
 
     @JavascriptInterface
@@ -29,7 +30,7 @@ class FitnessJavascriptBridge(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val availability = repository.checkAvailability()
-                val json = JsonUtils.toJson(availability, repository.getActiveProvider().name)
+                val json = JsonUtils.toJson(availability, repository.providerName)
                 dispatcher.dispatchAvailabilityStatus(json)
             } catch (e: Exception) {
                 Logger.e("Error checking provider availability", e)
@@ -69,17 +70,7 @@ class FitnessJavascriptBridge(
     @JavascriptInterface
     fun requestFitnessPermissions() {
         coroutineScope.launch(Dispatchers.Main) {
-            try {
-                val result = repository.requestPermissions(activity)
-                dispatcher.dispatchPermissionStatus(JsonUtils.toJson(result))
-            } catch (e: Exception) {
-                Logger.e("Error requesting fitness permissions", e)
-                val error = FitnessError(
-                    code = FitnessErrorCode.PERMISSION_DENIED,
-                    message = "Error requesting permissions: ${e.localizedMessage}"
-                )
-                dispatcher.dispatchError(JsonUtils.toJson(error))
-            }
+            onRequestPermissions()
         }
     }
 
@@ -88,14 +79,10 @@ class FitnessJavascriptBridge(
         coroutineScope.launch(Dispatchers.IO) {
             try {
                 val rangeType = JsonUtils.parseRangeType(requestJson)
-                val requestedProvider = JsonUtils.parseProviderName(requestJson)
-                if (requestedProvider != null) {
-                    repository.selectProvider(requestedProvider)
-                }
-
-                val dateRange = DateRangeUtils.calculateDateRange(rangeType)
+                val offset = JsonUtils.parseOffset(requestJson)
+                val dateRange = DateRangeUtils.calculateDateRange(rangeType, offset = offset)
                 val data = repository.readFitnessData(dateRange)
-                val json = JsonUtils.toJson(data)
+                val json = JsonUtils.toJson(data, offset)
                 dispatcher.dispatchDataReceived(json)
             } catch (e: Exception) {
                 Logger.e("Error getting fitness data", e)
@@ -105,48 +92,6 @@ class FitnessJavascriptBridge(
                 )
                 dispatcher.dispatchError(JsonUtils.toJson(error))
             }
-        }
-    }
-
-    @JavascriptInterface
-    fun subscribeToFitnessRecording() {
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val result = repository.subscribeToRecording()
-                dispatcher.dispatchSubscriptionStatus(JsonUtils.toJson(result))
-            } catch (e: Exception) {
-                Logger.e("Error subscribing to recording", e)
-                val error = FitnessError(
-                    code = FitnessErrorCode.RECORDING_SUBSCRIPTION_FAILED,
-                    message = "Failed to subscribe to recording: ${e.localizedMessage}"
-                )
-                dispatcher.dispatchError(JsonUtils.toJson(error))
-            }
-        }
-    }
-
-    @JavascriptInterface
-    fun unsubscribeFromFitnessRecording() {
-        coroutineScope.launch(Dispatchers.IO) {
-            try {
-                val result = repository.unsubscribeFromRecording()
-                dispatcher.dispatchSubscriptionStatus(JsonUtils.toJson(result))
-            } catch (e: Exception) {
-                Logger.e("Error unsubscribing from recording", e)
-                val error = FitnessError(
-                    code = FitnessErrorCode.RECORDING_SUBSCRIPTION_FAILED,
-                    message = "Failed to unsubscribe: ${e.localizedMessage}"
-                )
-                dispatcher.dispatchError(JsonUtils.toJson(error))
-            }
-        }
-    }
-
-    @JavascriptInterface
-    fun selectProvider(providerName: String) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val selectedName = repository.selectProvider(providerName)
-            checkProviderAvailability()
         }
     }
 

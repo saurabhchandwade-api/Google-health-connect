@@ -1,6 +1,5 @@
 package com.example.fitnessdashboard.data
 
-import android.app.Activity
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
@@ -18,10 +17,8 @@ import com.example.fitnessdashboard.domain.model.FitnessDayData
 import com.example.fitnessdashboard.domain.model.FitnessMetricStatus
 import com.example.fitnessdashboard.domain.model.FitnessSummary
 import com.example.fitnessdashboard.domain.model.MetricValue
-import com.example.fitnessdashboard.domain.model.PermissionResult
 import com.example.fitnessdashboard.domain.model.PermissionStatus
 import com.example.fitnessdashboard.domain.model.ProviderAvailability
-import com.example.fitnessdashboard.domain.model.SubscriptionResult
 import com.example.fitnessdashboard.util.DateRangeUtils
 import com.example.fitnessdashboard.util.Logger
 import kotlinx.coroutines.Dispatchers
@@ -74,13 +71,6 @@ class HealthConnectDataProvider(
             Logger.e("Error checking Health Connect permissions", e)
             PermissionStatus.NOT_GRANTED
         }
-    }
-
-    override suspend fun requestPermissions(activity: Activity): PermissionResult = withContext(Dispatchers.Main) {
-        PermissionResult(
-            isGranted = false,
-            message = "Health Connect permissions must be requested via HealthConnect Permission Contract."
-        )
     }
 
     override suspend fun readFitnessData(range: FitnessDateRange): FitnessDashboardData = withContext(Dispatchers.IO) {
@@ -198,20 +188,6 @@ class HealthConnectDataProvider(
             Logger.e("Error reading Health Connect data", e)
             createUnavailabilityData(range, "Health Connect error: ${e.localizedMessage}")
         }
-    }
-
-    override suspend fun subscribeToRecording(): SubscriptionResult = withContext(Dispatchers.IO) {
-        SubscriptionResult(
-            isSubscribed = false,
-            message = "Background recording subscriptions are managed automatically by Health Connect system sync."
-        )
-    }
-
-    override suspend fun unsubscribeFromRecording(): SubscriptionResult = withContext(Dispatchers.IO) {
-        SubscriptionResult(
-            isSubscribed = false,
-            message = "Background recording subscriptions are managed automatically by Health Connect system sync."
-        )
     }
 
     private fun createUnavailabilityData(range: FitnessDateRange, message: String): FitnessDashboardData {

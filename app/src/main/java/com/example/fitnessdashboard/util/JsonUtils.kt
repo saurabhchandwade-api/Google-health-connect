@@ -8,7 +8,6 @@ import com.example.fitnessdashboard.domain.model.MetricValue
 import com.example.fitnessdashboard.domain.model.PermissionResult
 import com.example.fitnessdashboard.domain.model.ProviderAvailability
 import com.example.fitnessdashboard.domain.model.RangeType
-import com.example.fitnessdashboard.domain.model.SubscriptionResult
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
@@ -70,19 +69,21 @@ object JsonUtils {
         }
     }
 
-    fun parseProviderName(requestJson: String): String? {
+    // Periods back from the current one; never positive, since future periods hold no data
+    fun parseOffset(requestJson: String): Int {
         return try {
             val element = gson.fromJson(requestJson, JsonObject::class.java)
-            element.get("provider")?.asString
+            (element.get("offset")?.asInt ?: 0).coerceAtMost(0)
         } catch (e: Exception) {
-            null
+            0
         }
     }
 
-    fun toJson(data: FitnessDashboardData): String {
+    fun toJson(data: FitnessDashboardData, offset: Int = 0): String {
         val root = JsonObject()
         root.addProperty("success", true)
         root.addProperty("range", data.range.type.name)
+        root.addProperty("offset", offset)
         root.addProperty("provider", data.providerName)
         root.addProperty("generatedAt", data.generatedAt.toString())
 
@@ -124,15 +125,6 @@ object JsonUtils {
         root.addProperty("success", availability == ProviderAvailability.AVAILABLE)
         root.addProperty("availability", availability.name)
         root.addProperty("provider", providerName)
-        return gson.toJson(root)
-    }
-
-    fun toJson(subscriptionResult: SubscriptionResult): String {
-        val root = JsonObject()
-        root.addProperty("success", subscriptionResult.isSubscribed)
-        root.addProperty("isSubscribed", subscriptionResult.isSubscribed)
-        root.addProperty("metric", subscriptionResult.metric)
-        root.addProperty("message", subscriptionResult.message)
         return gson.toJson(root)
     }
 }

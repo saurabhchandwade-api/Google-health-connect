@@ -35,27 +35,19 @@ The app features a hybrid architecture:
 ### Deprecation & Transition Context
 Google officially deprecated the Google Fit Android SDK and REST APIs, initiating a transition towards **Health Connect**. Google Fit APIs were turned down in mid-2025.
 
-### Provider Abstraction Solution
-To preserve the requested architecture while guaranteeing long-term functionality, this project implements a provider abstraction interface (`FitnessDataProvider`):
+### Health Connect Only
+The app reads all data through **Health Connect** (`androidx.health.connect:connect-client`). The Google Fit and Demo providers have been removed; `FitnessRepository` delegates directly to `HealthConnectDataProvider`, which implements:
 
 ```kotlin
 interface FitnessDataProvider {
     val name: String
     suspend fun checkAvailability(): ProviderAvailability
     suspend fun checkPermissions(): PermissionStatus
-    suspend fun requestPermissions(activity: Activity): PermissionResult
     suspend fun readFitnessData(range: FitnessDateRange): FitnessDashboardData
-    suspend fun subscribeToRecording(): SubscriptionResult
-    suspend fun unsubscribeFromRecording(): SubscriptionResult
 }
 ```
 
-The application ships with three concrete provider implementations:
-1. **`GoogleFitDataProvider`**: Implements Google Play Services Fitness (`com.google.android.gms:play-services-fitness`) and Google Sign-In (`play-services-auth`).
-2. **`HealthConnectDataProvider`**: Implements Jetpack Health Connect (`androidx.health.connect:connect-client`).
-3. **`FakeFitnessDataProvider` (Demo Mode)**: Generates deterministic, realistic daily fitness data for offline testing, emulator execution, and unit tests without requiring active Google Play Services accounts.
-
-**Default Behavior**: `FitnessRepository` defaults to `GoogleFitDataProvider` when available. If Google Fit is unavailable or fails due to SDK deprecation, `FitnessRepository` automatically falls back to `HealthConnectDataProvider` or allows user selection via the frontend provider dropdown.
+The Health Connect permission dialog is launched automatically when the app starts if access has not been granted yet.
 
 ---
 
@@ -130,14 +122,10 @@ Runtime permission requests are requested using AndroidX Activity Result APIs (`
 1. Connect physical Android device via USB with USB Debugging enabled.
 2. Select your device in Android Studio.
 3. Click **Run 'app'** (`Shift + F10`).
-4. Select **Google Fit** or **Health Connect** from the provider dropdown and tap **Connect Access**.
+4. Grant access in the Health Connect dialog that opens on launch, then tap **View my fitness data**.
 
 ### Testing on Android Emulator
-Emulators often lack physical step sensors and active Google account health data.
-To test data rendering on an emulator:
-1. Select **Demo Mode** in the dashboard provider dropdown.
-2. Toggle between **Today**, **This Week**, and **This Month**.
-3. Demo mode generates full metric sets, daily breakdown logs, and bar chart visualizations.
+Emulators have no step sensor, so most metrics read as zero unless you add sample records to Health Connect (for example with the Health Connect Toolbox app).
 
 ---
 
@@ -146,13 +134,10 @@ To test data rendering on an emulator:
 The native bridge is exposed to JavaScript as `window.AndroidFitnessBridge`.
 
 ### Exposed Native Methods:
-- `checkProviderAvailability()`: Checks if current provider (Google Fit / Health Connect) is available.
-- `checkFitnessPermissions()`: Checks runtime & OAuth permission status.
-- `requestFitnessPermissions()`: Launches native permission dialog or Google Sign-In flow.
+- `checkProviderAvailability()`: Checks if Health Connect is available.
+- `checkFitnessPermissions()`: Checks Health Connect permission status.
+- `requestFitnessPermissions()`: Launches the Health Connect permission dialog if access is not granted.
 - `getFitnessData(requestJson)`: Reads fitness metrics for range (`{"range": "TODAY" | "WEEK" | "MONTH"}`).
-- `subscribeToRecording()`: Subscribes to background step count recording.
-- `unsubscribeFromRecording()`: Unsubscribes from step count recording.
-- `selectProvider(providerName)`: Switches active provider (`"GoogleFit"`, `"HealthConnect"`, or `"Demo"`).
 - `openApplicationSettings()`: Opens system app settings if permissions are permanently denied.
 
 ### Received JavaScript Callbacks:
@@ -160,7 +145,6 @@ The native bridge is exposed to JavaScript as `window.AndroidFitnessBridge`.
 - `window.onFitnessError(errorJson)`
 - `window.onPermissionStatus(permissionJson)`
 - `window.onAvailabilityStatus(availabilityJson)`
-- `window.onSubscriptionStatus(subscriptionJson)`
 
 ### Example Request JSON:
 ```json
@@ -174,7 +158,7 @@ The native bridge is exposed to JavaScript as `window.AndroidFitnessBridge`.
 {
   "success": true,
   "range": "WEEK",
-  "provider": "GoogleFit",
+  "provider": "HealthConnect",
   "generatedAt": "2025-01-15T10:30:00Z",
   "data": {
     "summary": {
